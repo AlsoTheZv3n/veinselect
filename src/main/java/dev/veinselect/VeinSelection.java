@@ -3,6 +3,7 @@ package dev.veinselect;
 import java.util.ArrayDeque;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -16,8 +17,11 @@ public record VeinSelection(ResourceKey<Level> dimension, Block block, Set<Block
 		return level.dimension() == dimension && positions.contains(pos);
 	}
 
-	/** Breitensuche über alle 26 Nachbarn (inkl. diagonal), bis {@code max} gleiche Blöcke gefunden sind. */
-	public static VeinSelection scan(Level level, BlockPos origin, Block block, int max) {
+	/**
+	 * Breitensuche über alle 26 Nachbarn (inkl. diagonal), bis {@code max} gleiche Blöcke gefunden sind.
+	 * Ungeladene Chunks und Blöcke, die {@code mayBreak} ablehnt (z. B. Spawn-Schutz), werden nicht betreten.
+	 */
+	public static VeinSelection scan(Level level, BlockPos origin, Block block, int max, Predicate<BlockPos> mayBreak) {
 		Set<BlockPos> found = new LinkedHashSet<>();
 		ArrayDeque<BlockPos> queue = new ArrayDeque<>();
 		BlockPos start = origin.immutable();
@@ -33,7 +37,8 @@ public record VeinSelection(ResourceKey<Level> dimension, Block block, Set<Block
 						if (dx == 0 && dy == 0 && dz == 0) continue;
 
 						BlockPos next = current.offset(dx, dy, dz);
-						if (found.contains(next) || !level.getBlockState(next).is(block)) continue;
+						// isLoaded zuerst: getBlockState() würde fehlende Chunks synchron laden
+						if (found.contains(next) || !level.isLoaded(next) || !level.getBlockState(next).is(block) || !mayBreak.test(next)) continue;
 
 						found.add(next);
 						queue.add(next);

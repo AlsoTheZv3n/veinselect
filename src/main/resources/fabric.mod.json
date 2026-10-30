@@ -3,7 +3,7 @@
 	"id": "veinselect",
 	"version": "${version}",
 	"name": "Vein Select",
-	"description": "Taste drücken, um bis zu 64 zusammenhängende gleiche Blöcke auszuwählen. Einen davon abbauen – alle werden abgebaut.",
+	"description": "Taste drücken, um zusammenhängende gleiche Blöcke auszuwählen (Standard: bis zu 64, vom Server-Owner einstellbar). Einen davon abbauen – alle werden abgebaut.",
 	"authors": [],
 	"license": "MIT",
 	"environment": "*",
@@ -13,6 +13,9 @@
 		],
 		"client": [
 			"dev.veinselect.client.VeinSelectClient"
+		],
+		"modmenu": [
+			"dev.veinselect.client.VeinSelectModMenu"
 		]
 	},
 	"depends": {
@@ -20,5 +23,8 @@
 		"minecraft": "~26.3",
 		"java": ">=25",
 		"fabric-api": "*"
+	},
+	"suggests": {
+		"modmenu": "*"
 	}
 }

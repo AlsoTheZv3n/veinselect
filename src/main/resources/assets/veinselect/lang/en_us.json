@@ -2,7 +2,17 @@
 	"key.category.veinselect.main": "Vein Select",
 	"key.veinselect.select": "Select / deselect vein",
 	"message.veinselect.selected": "%s × %s selected – break one of them",
+	"message.veinselect.selected_limit": "%s × %s selected (limit reached) – break one of them",
 	"message.veinselect.cleared": "Selection cleared",
+	"message.veinselect.mining": "Mining … %s / %s",
 	"message.veinselect.mined": "%s blocks mined",
-	"message.veinselect.not_on_server": "Vein Select is not installed on this server"
+	"message.veinselect.not_on_server": "Vein Select is not installed on this server",
+	"command.veinselect.info": "Vein Select: effective limit %s (your setting %s, allowed %s, server limit %s)",
+	"command.veinselect.max": "Your limit is now %s (effective: %s)",
+	"command.veinselect.serverlimit.get": "Server limit: %s blocks",
+	"command.veinselect.serverlimit.set": "Server limit set to %s blocks",
+	"screen.veinselect.title": "Vein Select",
+	"screen.veinselect.max_blocks": "Maximum blocks per selection (1–%s)",
+	"screen.veinselect.server_allowed": "This server allows you up to %s blocks",
+	"screen.veinselect.no_server": "On servers the owner sets the limit (default: %s)"
 }

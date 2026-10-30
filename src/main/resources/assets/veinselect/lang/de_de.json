@@ -2,7 +2,17 @@
 	"key.category.veinselect.main": "Vein Select",
 	"key.veinselect.select": "Ader auswählen / abwählen",
 	"message.veinselect.selected": "%s × %s ausgewählt – einen davon abbauen",
+	"message.veinselect.selected_limit": "%s × %s ausgewählt (Limit erreicht) – einen davon abbauen",
 	"message.veinselect.cleared": "Auswahl aufgehoben",
+	"message.veinselect.mining": "Abbau läuft … %s / %s",
 	"message.veinselect.mined": "%s Blöcke abgebaut",
-	"message.veinselect.not_on_server": "Vein Select ist auf diesem Server nicht installiert"
+	"message.veinselect.not_on_server": "Vein Select ist auf diesem Server nicht installiert",
+	"command.veinselect.info": "Vein Select: wirksames Limit %s (deine Einstellung %s, erlaubt %s, Server-Limit %s)",
+	"command.veinselect.max": "Dein Limit ist jetzt %s (wirksam: %s)",
+	"command.veinselect.serverlimit.get": "Server-Limit: %s Blöcke",
+	"command.veinselect.serverlimit.set": "Server-Limit auf %s Blöcke gesetzt",
+	"screen.veinselect.title": "Vein Select",
+	"screen.veinselect.max_blocks": "Maximale Blöcke pro Auswahl (1–%s)",
+	"screen.veinselect.server_allowed": "Dieser Server erlaubt dir bis zu %s Blöcke",
+	"screen.veinselect.no_server": "Auf Servern legt der Owner das Limit fest (Standard: %s)"
 }
