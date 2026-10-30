@@ -1,0 +1,8 @@
+{
+	"key.category.veinselect.main": "Vein Select",
+	"key.veinselect.select": "Ader auswählen / abwählen",
+	"message.veinselect.selected": "%s × %s ausgewählt – einen davon abbauen",
+	"message.veinselect.cleared": "Auswahl aufgehoben",
+	"message.veinselect.mined": "%s Blöcke abgebaut",
+	"message.veinselect.not_on_server": "Vein Select ist auf diesem Server nicht installiert"
+}
