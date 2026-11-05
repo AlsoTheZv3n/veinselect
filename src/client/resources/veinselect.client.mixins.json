@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"package": "dev.veinselect.client.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"MouseHandlerMixin",
+		"RenderTypeInvoker"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

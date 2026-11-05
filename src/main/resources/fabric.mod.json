@@ -3,7 +3,7 @@
 	"id": "veinselect",
 	"version": "${version}",
 	"name": "Vein Select",
-	"description": "Taste drücken, um zusammenhängende gleiche Blöcke auszuwählen (Standard: bis zu 64, vom Server-Owner einstellbar). Einen davon abbauen – alle werden abgebaut.",
+	"description": "Taste drücken, um Blöcke auszuwählen: als Ader, Tunnel, 3×3 oder Treppe (Taste halten + Mausrad wechselt den Modus). Einen davon abbauen – alle werden abgebaut. Standard: bis zu 64 Blöcke, vom Server-Owner einstellbar.",
 	"authors": [],
 	"license": "MIT",
 	"environment": "*",
@@ -18,6 +18,12 @@
 			"dev.veinselect.client.VeinSelectModMenu"
 		]
 	},
+	"mixins": [
+		{
+			"config": "veinselect.client.mixins.json",
+			"environment": "client"
+		}
+	],
 	"depends": {
 		"fabricloader": ">=0.20.1",
 		"minecraft": "~26.3",

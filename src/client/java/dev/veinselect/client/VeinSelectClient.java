@@ -6,9 +6,11 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.lwjgl.sdl.SDLScancode;
 
+import dev.veinselect.VeinMode;
 import dev.veinselect.VeinSelect;
 import dev.veinselect.net.LimitsSyncPayload;
 import dev.veinselect.net.MaxBlocksPayload;
+import dev.veinselect.net.ModePayload;
 import dev.veinselect.net.SelectVeinPayload;
 import dev.veinselect.net.SelectionSyncPayload;
 
@@ -35,10 +37,16 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 public class VeinSelectClient implements ClientModInitializer {
 	private static final int FILL_COLOR = ARGB.colorFromFloat(0.35f, 0.2f, 0.85f, 1.0f);
 	private static final int OUTLINE_COLOR = ARGB.colorFromFloat(1.0f, 0.3f, 0.9f, 1.0f);
+	/** Gleiche Farbe, aber schwach: Kanten in oder hinter Blöcken. */
+	private static final int HIDDEN_OUTLINE_COLOR = ARGB.colorFromFloat(0.35f, 0.3f, 0.9f, 1.0f);
 	/** Relativ zur Breite der Vanilla-Blockumrandung. */
 	private static final float OUTLINE_WIDTH_FACTOR = 1.5f;
 
 	private static KeyMapping selectKey;
+	/** V ist gedrückt. Eigene Flankenerkennung, weil Tastenwiederholung consumeClick() mehrfach auslöst. */
+	private static boolean keyHeld = false;
+	/** Beim Loslassen von V die Auswahl aufheben; entfällt, sobald mit dem Mausrad der Modus gewechselt wurde. */
+	private static boolean clearOnRelease = false;
 
 	// Nur auf dem Render-Thread verwendet
 	private static VeinHighlight highlight = null;
@@ -65,11 +73,18 @@ public class VeinSelectClient implements ClientModInitializer {
 			VeinSelectClientConfig.setMaxBlocks(payload.maxBlocks());
 			serverAllowed = payload.allowed();
 		});
+		// Kommt nach /veinselect mode: Modus übernehmen, damit er in den Einstellungen gespeichert ist
+		ClientPlayNetworking.registerGlobalReceiver(ModePayload.TYPE, (payload, context) -> VeinSelectClientConfig.setMode(payload.mode()));
 
-		ClientPlayConnectionEvents.JOIN.register((listener, sender, client) -> sendMaxBlocks());
+		ClientPlayConnectionEvents.JOIN.register((listener, sender, client) -> {
+			sendMaxBlocks();
+			sendMode();
+		});
 		ClientPlayConnectionEvents.DISCONNECT.register((listener, client) -> {
 			clearHighlight();
 			serverAllowed = -1;
+			keyHeld = false;
+			clearOnRelease = false;
 		});
 
 		// COLLECT_SUBMITS statt eines Terrain-Events: Sodium/Iris ersetzen das Terrain-Rendering, dort feuern diese Events nicht
@@ -93,25 +108,98 @@ public class VeinSelectClient implements ClientModInitializer {
 		}
 	}
 
+	/** Speichert den Modus und meldet ihn dem Server, falls verbunden. Der Server berechnet eine bestehende Auswahl neu. */
+	static void setMode(VeinMode mode) {
+		VeinSelectClientConfig.setMode(mode);
+		sendMode();
+	}
+
+	private static void sendMode() {
+		if (Minecraft.getInstance().getConnection() != null && ClientPlayNetworking.canSend(ModePayload.TYPE)) {
+			ClientPlayNetworking.send(new ModePayload(VeinSelectClientConfig.mode()));
+		}
+	}
+
+	/** Name der Auswahl-Taste, wie in der Tastenbelegung eingestellt. */
+	static Component selectKeyName() {
+		return selectKey.getTranslatedKeyMessage();
+	}
+
+	/**
+	 * Vom Mausrad-Mixin: V gehalten + Mausrad = Modus wechseln, wie die Hotbar (nach oben = vorheriger).
+	 *
+	 * @param steps Rastungen, positiv = nach oben
+	 * @return {@code true}, wenn das Mausrad verbraucht wurde und die Hotbar sich nicht bewegen soll
+	 */
+	public static boolean onScroll(int steps) {
+		Minecraft client = Minecraft.getInstance();
+		if (!keyHeld || steps == 0 || client.player == null || client.player.isSpectator()
+				|| client.getConnection() == null || !ClientPlayNetworking.canSend(ModePayload.TYPE)) {
+			return false;
+		}
+
+		VeinMode mode = VeinSelectClientConfig.mode().cycle(-steps);
+		// Wer gescrollt hat, will die Auswahl behalten, nur in einem anderen Modus
+		clearOnRelease = false;
+		setMode(mode);
+		// Mit Auswahl ersetzt die Antwort des Servers diese Meldung durch Modus + neue Blockanzahl
+		client.player.sendOverlayMessage(Component.translatable("message.veinselect.mode", mode.displayName()));
+		return true;
+	}
+
 	private static void onTick(Minecraft client) {
 		// Dimensionswechsel: Hervorhebung gehört zur alten Welt
 		if (selectionLevel != null && client.level != selectionLevel) clearHighlight();
 
-		while (selectKey.consumeClick()) {
-			if (client.player == null || client.getConnection() == null) continue;
+		boolean clicked = false;
+		while (selectKey.consumeClick()) clicked = true;
+		boolean down = selectKey.isDown();
 
-			if (!ClientPlayNetworking.canSend(SelectVeinPayload.TYPE)) {
-				client.player.sendOverlayMessage(Component.translatable("message.veinselect.not_on_server"));
-				continue;
-			}
-
-			Optional<BlockPos> target = Optional.empty();
-			if (client.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
-				target = Optional.of(hit.getBlockPos());
-			}
-
-			ClientPlayNetworking.send(new SelectVeinPayload(target));
+		// clicked fängt auch Antippen ab, das zwischen zwei Ticks gedrückt und wieder losgelassen wurde
+		if (!keyHeld && (clicked || down)) {
+			keyHeld = true;
+			onKeyPressed(client);
 		}
+		if (keyHeld && !down) {
+			keyHeld = false;
+			onKeyReleased(client);
+		}
+	}
+
+	private static void onKeyPressed(Minecraft client) {
+		clearOnRelease = false;
+		if (client.player == null || client.getConnection() == null) return;
+
+		if (!ClientPlayNetworking.canSend(SelectVeinPayload.TYPE)) {
+			client.player.sendOverlayMessage(Component.translatable("message.veinselect.not_on_server"));
+			return;
+		}
+
+		if (client.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK && !isSelected(client, hit.getBlockPos())) {
+			ClientPlayNetworking.send(new SelectVeinPayload(Optional.of(hit.getBlockPos()), hit.getDirection()));
+			return;
+		}
+
+		// Auf die Auswahl oder ins Leere: erst beim Loslassen aufheben, damit V + Mausrad noch den Modus wechseln kann
+		clearOnRelease = true;
+		if (highlight == null) {
+			client.player.sendOverlayMessage(Component.translatable("message.veinselect.mode_hint",
+					VeinSelectClientConfig.mode().displayName(), selectKeyName()));
+		}
+	}
+
+	private static void onKeyReleased(Minecraft client) {
+		if (!clearOnRelease) return;
+
+		clearOnRelease = false;
+		if (client.getConnection() != null && ClientPlayNetworking.canSend(SelectVeinPayload.TYPE)) {
+			ClientPlayNetworking.send(SelectVeinPayload.clear());
+		}
+	}
+
+	private static boolean isSelected(Minecraft client, BlockPos pos) {
+		VeinHighlight vein = highlight;
+		return vein != null && client.level == selectionLevel && vein.contains(pos);
 	}
 
 	private static void renderHighlight(LevelRenderContext context) {
@@ -135,9 +223,17 @@ public class VeinSelectClient implements ClientModInitializer {
 					(pose, buffer) -> vein.renderFill(pose, buffer, dx, dy, dz, FILL_COLOR));
 		}
 
-		// Gleicher Render-Typ und gleiche Breite wie die Vanilla-Blockumrandung
-		RenderType lines = client.gameRenderer.useImprovedTransparency() ? RenderTypes.linesTranslucentNoDepthWrite() : RenderTypes.linesTranslucent();
 		float width = client.gameRenderer.gameRenderState().windowRenderState.appropriateLineWidth * OUTLINE_WIDTH_FACTOR;
+
+		// Schwach durch Blöcke hindurch: zeigt auch verdeckte Teile, z. B. wohin eine Treppe oder ein Tunnel führt
+		RenderType seeThrough = SeeThroughLines.renderType(shaders);
+		if (seeThrough != null) {
+			context.submitNodeCollector().submitCustomGeometry(poseStack, seeThrough,
+					(pose, buffer) -> vein.renderOutline(pose, buffer, dx, dy, dz, HIDDEN_OUTLINE_COLOR, width));
+		}
+
+		// Sichtbare Kanten kräftig darüber; gleicher Render-Typ und gleiche Breite wie die Vanilla-Blockumrandung
+		RenderType lines = client.gameRenderer.useImprovedTransparency() ? RenderTypes.linesTranslucentNoDepthWrite() : RenderTypes.linesTranslucent();
 		context.submitNodeCollector().submitCustomGeometry(poseStack, lines,
 				(pose, buffer) -> vein.renderOutline(pose, buffer, dx, dy, dz, OUTLINE_COLOR, width));
 	}

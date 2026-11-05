@@ -23,19 +23,26 @@ final class VeinHighlight {
 	private static final float INFLATE = 0.003f;
 
 	private final BlockPos origin;
+	/** Ausgewählte Blöcke als {@link BlockPos#asLong()}. */
+	private final LongSet cells;
 	/** Je Fläche 4 Ecken à (x, y, z). */
 	private final float[] faces;
 	/** Je Kante Start (x, y, z), Ende (x, y, z) und Richtung (x, y, z). */
 	private final float[] edges;
 
-	private VeinHighlight(BlockPos origin, float[] faces, float[] edges) {
+	private VeinHighlight(BlockPos origin, LongSet cells, float[] faces, float[] edges) {
 		this.origin = origin;
+		this.cells = cells;
 		this.faces = faces;
 		this.edges = edges;
 	}
 
 	BlockPos origin() {
 		return origin;
+	}
+
+	boolean contains(BlockPos pos) {
+		return cells.contains(pos.asLong());
 	}
 
 	static VeinHighlight build(List<BlockPos> positions) {
@@ -62,7 +69,7 @@ final class VeinHighlight {
 			}
 		}
 
-		return new VeinHighlight(origin, faces.toFloatArray(), edges.toFloatArray());
+		return new VeinHighlight(origin, cells, faces.toFloatArray(), edges.toFloatArray());
 	}
 
 	/**

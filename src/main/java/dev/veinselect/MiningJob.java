@@ -29,7 +29,7 @@ final class MiningJob {
 	MiningJob(ServerPlayer player, VeinSelection selection, BlockPos brokenByPlayer) {
 		this.playerId = player.getUUID();
 		this.selection = selection;
-		this.remaining = selection.positions().stream().filter(p -> !p.equals(brokenByPlayer)).iterator();
+		this.remaining = selection.blocks().keySet().stream().filter(p -> !p.equals(brokenByPlayer)).iterator();
 		this.hadTool = !player.getMainHandItem().isEmpty();
 		this.toolSlot = player.getInventory().getSelectedSlot();
 	}
@@ -56,7 +56,8 @@ final class MiningJob {
 				}
 
 				BlockPos target = remaining.next();
-				if (!level.isLoaded(target) || !level.getBlockState(target).is(selection.block()) || !VeinSelect.mayBreak(player, target)) continue;
+				// Nur, wenn dort noch derselbe Block steht wie beim Auswählen (Formen enthalten gemischte Blöcke)
+				if (!level.isLoaded(target) || !level.getBlockState(target).is(selection.blockAt(target)) || !VeinSelect.mayBreak(player, target)) continue;
 
 				attempts++;
 				// Normaler Abbau: Drops, Werkzeug-Haltbarkeit, Verzauberungen, Hunger, Abenteuer-Modus
@@ -68,7 +69,7 @@ final class MiningJob {
 
 		if (!remaining.hasNext()) return finish(player);
 
-		player.sendOverlayMessage(Component.translatable("message.veinselect.mining", mined, selection.positions().size()));
+		player.sendOverlayMessage(Component.translatable("message.veinselect.mining", mined, selection.blocks().size()));
 		return false;
 	}
 
