@@ -8,6 +8,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Baut eine Auswahl ab, höchstens {@link #BLOCKS_PER_TICK} Blöcke pro Tick, damit große Adern den Server nicht einfrieren.
@@ -56,8 +57,14 @@ final class MiningJob {
 				}
 
 				BlockPos target = remaining.next();
-				// Nur, wenn dort noch derselbe Block steht wie beim Auswählen (Formen enthalten gemischte Blöcke)
-				if (!level.isLoaded(target) || !level.getBlockState(target).is(selection.blockAt(target)) || !VeinSelect.mayBreak(player, target)) continue;
+				if (!level.isLoaded(target)) continue;
+
+				// Nur, wenn dort noch derselbe Block steht wie beim Auswählen (Formen enthalten gemischte Blöcke).
+				// Die Regeln der Auswahl hier nochmal, weil destroyBlock() weder Härte noch Werkzeug prüft.
+				BlockState state = level.getBlockState(target);
+				if (!state.is(selection.blockAt(target)) || !VeinSelection.isMineable(player, target, state)) continue;
+				if (selection.mode().isShape() && !VeinSelection.dropsWithHeldTool(player, state)) continue;
+				if (!VeinSelect.mayBreak(player, target)) continue;
 
 				attempts++;
 				// Normaler Abbau: Drops, Werkzeug-Haltbarkeit, Verzauberungen, Hunger, Abenteuer-Modus

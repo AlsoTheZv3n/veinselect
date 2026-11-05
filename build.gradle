@@ -17,6 +17,19 @@ loom {
 	}
 }
 
+// Automatisierte Tests im echten Client: gradlew runClientGameTest (Quellcode in src/gametest)
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "veinselect-gametest"
+		// Nur Client-Tests; Server-Gametests würden sonst bei jedem "gradlew build" mitlaufen
+		enableGameTests = false
+		enableClientGameTests = true
+		// build/run/clientGameTest behalten, damit dort abgelegte Mods (Iris, Sodium) und Shader-Packs bleiben
+		clearRunDirectory = false
+	}
+}
+
 repositories {
 	maven {
 		name = 'TerraformersMC'
