@@ -1,5 +1,6 @@
 package dev.veinselect.client;
 
+import dev.veinselect.VeinMode;
 import dev.veinselect.VeinSelect;
 
 import net.minecraft.ChatFormatting;
@@ -20,6 +21,8 @@ public class VeinSelectConfigScreen extends Screen {
 	private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
 	private EditBox maxBlocksBox;
 	private Button doneButton;
+	/** Erst mit „Fertig“ übernommen, wie die Blockanzahl. */
+	private VeinMode mode = VeinSelectClientConfig.mode();
 
 	public VeinSelectConfigScreen(Screen parent) {
 		super(Component.translatable("screen.veinselect.title"));
@@ -32,6 +35,13 @@ public class VeinSelectConfigScreen extends Screen {
 
 		LinearLayout content = layout.addToContents(LinearLayout.vertical().spacing(8));
 		content.defaultCellSetting().alignHorizontallyCenter();
+
+		content.addChild(Button.builder(modeLabel(), button -> {
+			mode = mode.cycle(1);
+			button.setMessage(modeLabel());
+		}).width(200).build());
+		content.addChild(new StringWidget(Component.translatable("screen.veinselect.mode_hint", VeinSelectClient.selectKeyName())
+				.withStyle(ChatFormatting.GRAY), font));
 
 		Component label = Component.translatable("screen.veinselect.max_blocks", VeinSelect.HARD_LIMIT);
 		content.addChild(new StringWidget(label, font));
@@ -61,6 +71,10 @@ public class VeinSelectConfigScreen extends Screen {
 		minecraft.gui.setScreen(parent);
 	}
 
+	private Component modeLabel() {
+		return Component.translatable("screen.veinselect.mode", mode.displayName());
+	}
+
 	private static Component limitInfo() {
 		int allowed = VeinSelectClient.serverAllowed();
 		Component info = allowed > 0
@@ -88,6 +102,7 @@ public class VeinSelectConfigScreen extends Screen {
 	private void save() {
 		int value = parsedValue();
 		if (value > 0) VeinSelectClient.setMaxBlocks(value);
+		if (mode != VeinSelectClientConfig.mode()) VeinSelectClient.setMode(mode);
 		onClose();
 	}
 }

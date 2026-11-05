@@ -11,10 +11,12 @@ import org.slf4j.LoggerFactory;
 
 import dev.veinselect.net.LimitsSyncPayload;
 import dev.veinselect.net.MaxBlocksPayload;
+import dev.veinselect.net.ModePayload;
 import dev.veinselect.net.SelectVeinPayload;
 import dev.veinselect.net.SelectionSyncPayload;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -49,17 +51,21 @@ public class VeinSelect implements ModInitializer {
 	// Nur auf dem Server-Thread verwendet
 	private static final Map<UUID, VeinSelection> SELECTIONS = new HashMap<>();
 	private static final Map<UUID, Integer> PREFERRED_LIMITS = new HashMap<>();
+	private static final Map<UUID, VeinMode> MODES = new HashMap<>();
 	private static final List<MiningJob> JOBS = new ArrayList<>();
 
 	@Override
 	public void onInitialize() {
 		PayloadTypeRegistry.serverboundPlay().register(SelectVeinPayload.TYPE, SelectVeinPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(MaxBlocksPayload.TYPE, MaxBlocksPayload.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(ModePayload.TYPE, ModePayload.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(SelectionSyncPayload.TYPE, SelectionSyncPayload.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(LimitsSyncPayload.TYPE, LimitsSyncPayload.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(ModePayload.TYPE, ModePayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(SelectVeinPayload.TYPE, (payload, context) -> onSelect(context.player(), payload));
 		ServerPlayNetworking.registerGlobalReceiver(MaxBlocksPayload.TYPE, (payload, context) -> setPreferredLimit(context.player(), payload.maxBlocks()));
+		ServerPlayNetworking.registerGlobalReceiver(ModePayload.TYPE, (payload, context) -> setMode(context.player(), payload.mode(), false));
 
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> VeinSelectConfig.load());
 		CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> VeinSelectCommand.register(dispatcher));
@@ -69,10 +75,12 @@ public class VeinSelect implements ModInitializer {
 		ServerPlayConnectionEvents.DISCONNECT.register((listener, server) -> {
 			SELECTIONS.remove(listener.getPlayer().getUUID());
 			PREFERRED_LIMITS.remove(listener.getPlayer().getUUID());
+			MODES.remove(listener.getPlayer().getUUID());
 		});
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
 			SELECTIONS.clear();
 			PREFERRED_LIMITS.clear();
+			MODES.clear();
 			JOBS.clear();
 		});
 	}
@@ -121,6 +129,32 @@ public class VeinSelect implements ModInitializer {
 		}
 	}
 
+	/** Modus aus den Einstellungen des Spielers (vom Client gemeldet). */
+	public static VeinMode mode(ServerPlayer player) {
+		return MODES.getOrDefault(player.getUUID(), VeinMode.VEIN);
+	}
+
+	/**
+	 * Setzt den Modus und berechnet eine bestehende Auswahl damit neu, vom selben Ursprung aus.
+	 *
+	 * @param syncToClient nach {@code /veinselect mode}: dem Client den Modus schicken, damit er ihn speichert
+	 */
+	public static void setMode(ServerPlayer player, VeinMode mode, boolean syncToClient) {
+		MODES.put(player.getUUID(), mode);
+		if (syncToClient && ServerPlayNetworking.canSend(player, ModePayload.TYPE)) {
+			ServerPlayNetworking.send(player, new ModePayload(mode));
+		}
+
+		VeinSelection current = SELECTIONS.get(player.getUUID());
+		if (current == null || current.mode() == mode) return;
+
+		if (current.dimension() == player.level().dimension()) {
+			select(player, current.origin(), current.face());
+		} else {
+			clear(player);
+		}
+	}
+
 	/**
 	 * Darf der Spieler diesen Block abbauen? destroyBlock() prüft nur den Abenteuer-Modus,
 	 * Spawn-Schutz und Weltgrenze prüft Vanilla sonst nur beim Block, auf den der Spieler wirklich klickt.
@@ -139,14 +173,20 @@ public class VeinSelect implements ModInitializer {
 		}
 
 		BlockPos origin = payload.target().get();
-		ServerLevel level = player.level();
 
 		// Schutz gegen manipulierte Pakete: nur Blöcke in Reichweite
 		if (player.getEyePosition().distanceToSqr(Vec3.atCenterOf(origin)) > MAX_DISTANCE_SQR) return;
 
-		// Erneut auf die bestehende Auswahl drücken = abwählen
-		VeinSelection current = SELECTIONS.get(player.getUUID());
-		if (current != null && current.contains(level, origin)) {
+		// Abwählen entscheidet der Client (V auf die Auswahl oder ins Leere schickt ein leeres Ziel), damit
+		// V halten + Mausrad den Modus einer bestehenden Auswahl wechseln kann, ohne sie vorher aufzuheben
+		select(player, origin, payload.face());
+	}
+
+	/** Neue Auswahl ab {@code origin} mit dem aktuellen Modus des Spielers; ersetzt eine bestehende. */
+	private static void select(ServerPlayer player, BlockPos origin, Direction face) {
+		ServerLevel level = player.level();
+		// isLoaded zuerst: Beim Moduswechsel kann der Ursprung inzwischen weit weg sein
+		if (!level.isLoaded(origin)) {
 			clear(player);
 			return;
 		}
@@ -158,20 +198,24 @@ public class VeinSelect implements ModInitializer {
 		}
 
 		int limit = effectiveLimit(player);
-		VeinSelection selection = VeinSelection.scan(level, origin, state.getBlock(), limit, pos -> mayBreak(player, pos));
+		VeinMode mode = mode(player);
+		VeinSelection selection = VeinSelection.scan(player, origin, face, mode, limit, pos -> mayBreak(player, pos));
 		SELECTIONS.put(player.getUUID(), selection);
-		ServerPlayNetworking.send(player, new SelectionSyncPayload(List.copyOf(selection.positions())));
+		ServerPlayNetworking.send(player, new SelectionSyncPayload(List.copyOf(selection.blocks().keySet())));
 
-		int count = selection.positions().size();
-		String key = count >= limit ? "message.veinselect.selected_limit" : "message.veinselect.selected";
-		player.sendOverlayMessage(Component.translatable(key, count, state.getBlock().getName()));
+		int count = selection.blocks().size();
+		boolean full = count >= limit;
+		Component message = mode.isShape()
+				? Component.translatable(full ? "message.veinselect.selected_shape_limit" : "message.veinselect.selected_shape", mode.displayName(), count)
+				: Component.translatable(full ? "message.veinselect.selected_limit" : "message.veinselect.selected", mode.displayName(), count, state.getBlock().getName());
+		player.sendOverlayMessage(message);
 	}
 
 	private static void onBlockBroken(Level level, Player player, BlockPos pos, BlockState state, BlockEntity blockEntity) {
 		if (MiningJob.isBreaking() || !(player instanceof ServerPlayer serverPlayer)) return;
 
 		VeinSelection selection = SELECTIONS.get(player.getUUID());
-		if (selection == null || !selection.contains(level, pos) || !state.is(selection.block())) return;
+		if (selection == null || !selection.contains(level, pos) || !state.is(selection.blockAt(pos))) return;
 
 		SELECTIONS.remove(player.getUUID());
 		ServerPlayNetworking.send(serverPlayer, new SelectionSyncPayload(List.of()));

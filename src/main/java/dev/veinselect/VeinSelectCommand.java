@@ -2,6 +2,7 @@ package dev.veinselect;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
@@ -14,17 +15,25 @@ import net.minecraft.server.permissions.Permissions;
 /**
  * {@code /veinselect} – eigene Limits anzeigen<br>
  * {@code /veinselect max <anzahl>} – eigenes Limit setzen (wird im Client gespeichert)<br>
+ * {@code /veinselect mode [modus]} – Modus anzeigen / setzen (wird im Client gespeichert)<br>
  * {@code /veinselect serverlimit [anzahl]} – Server-Limit anzeigen / als Owner setzen
  */
 final class VeinSelectCommand {
 	private VeinSelectCommand() {}
 
 	static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+		// Ein Literal pro Modus: Autovervollständigung und keine Tippfehler-Fälle
+		LiteralArgumentBuilder<CommandSourceStack> mode = Commands.literal("mode").executes(VeinSelectCommand::getMode);
+		for (VeinMode value : VeinMode.values()) {
+			mode.then(Commands.literal(value.id()).executes(context -> setMode(context, value)));
+		}
+
 		dispatcher.register(Commands.literal("veinselect")
 				.executes(VeinSelectCommand::info)
 				.then(Commands.literal("max")
 						.then(Commands.argument("anzahl", IntegerArgumentType.integer(1, VeinSelect.HARD_LIMIT))
 								.executes(VeinSelectCommand::setMax)))
+				.then(mode)
 				.then(Commands.literal("serverlimit")
 						.executes(VeinSelectCommand::getServerLimit)
 						.then(Commands.argument("anzahl", IntegerArgumentType.integer(1, VeinSelect.HARD_LIMIT))
@@ -56,6 +65,20 @@ final class VeinSelectCommand {
 		context.getSource().sendSuccess(() -> Component.translatableWithFallback("command.veinselect.max",
 				"Your limit is now %s (effective: %s)", VeinSelect.preferredLimit(player), effective), false);
 		return effective;
+	}
+
+	private static int getMode(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+		VeinMode mode = VeinSelect.mode(context.getSource().getPlayerOrException());
+		context.getSource().sendSuccess(() -> Component.translatableWithFallback("command.veinselect.mode.get",
+				"Mode: %s", mode.displayName()), false);
+		return mode.ordinal();
+	}
+
+	private static int setMode(CommandContext<CommandSourceStack> context, VeinMode mode) throws CommandSyntaxException {
+		VeinSelect.setMode(context.getSource().getPlayerOrException(), mode, true);
+		context.getSource().sendSuccess(() -> Component.translatableWithFallback("command.veinselect.mode.set",
+				"Mode set to %s", mode.displayName()), false);
+		return mode.ordinal();
 	}
 
 	private static int getServerLimit(CommandContext<CommandSourceStack> context) {
