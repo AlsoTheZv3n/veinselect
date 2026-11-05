@@ -69,11 +69,11 @@ gradlew build        (Windows)
 ./gradlew build      (macOS/Linux)
 ```
 
-Ergebnis: `build/libs/veinselect-1.1.0.jar`
+Ergebnis: `build/libs/veinselect-1.1.1.jar`
 
 ## Installieren
 
 1. Fabric Loader **0.20.1+** für Minecraft **26.3** installieren
-2. In den `mods`-Ordner: `veinselect-1.1.0.jar` + **Fabric API 0.165.0+26.3** (oder neuer für 26.3)
+2. In den `mods`-Ordner: `veinselect-1.1.1.jar` + **Fabric API 0.165.0+26.3** (oder neuer für 26.3)
 3. Optional: **Mod Menu 21.0.0+** für das Einstellungsmenü
-4. Multiplayer: Mod muss auch auf dem Server installiert sein, in derselben Version (1.1.0 ist nicht mit 1.0.0 kompatibel)
+4. Multiplayer: Mod muss auch auf dem Server installiert sein, in derselben Version (1.1.x ist nicht mit 1.0.0 kompatibel)

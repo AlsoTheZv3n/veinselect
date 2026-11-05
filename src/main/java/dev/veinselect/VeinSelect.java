@@ -191,8 +191,10 @@ public class VeinSelect implements ModInitializer {
 			return;
 		}
 
+		// Der Ursprung landet immer in der Auswahl, also hier dieselbe Grundregel wie für alle anderen Blöcke.
+		// Sonst: 3×3 auf Grundgestein, Nachbarblock abbauen → der Abbau-Job zerstört das Grundgestein mit.
 		BlockState state = level.getBlockState(origin);
-		if (state.isAir() || !mayBreak(player, origin)) {
+		if (!VeinSelection.isMineable(player, origin, state) || !mayBreak(player, origin)) {
 			clear(player);
 			return;
 		}

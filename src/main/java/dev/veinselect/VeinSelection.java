@@ -30,6 +30,23 @@ public record VeinSelection(ResourceKey<Level> dimension, VeinMode mode, BlockPo
 	}
 
 	/**
+	 * Grundregel für jeden Block, den Vein Select abbaut: keine Luft, keine Flüssigkeit und außerhalb des
+	 * Kreativmodus nichts Unzerstörbares (Grundgestein, Endportalrahmen). Nötig, weil destroyBlock() die Härte
+	 * nicht prüft; Vanilla verhindert das sonst nur über den Abbaufortschritt beim Block, den der Spieler anklickt.
+	 */
+	// liquid() ist als Legacy markiert, trifft aber genau Wasser/Lava; getFluidState() würde auch geflutete Stufen ausschließen
+	@SuppressWarnings("deprecation")
+	public static boolean isMineable(Player player, BlockPos pos, BlockState state) {
+		if (state.isAir() || state.liquid()) return false;
+		return player.isCreative() || state.getDestroySpeed(player.level(), pos) >= 0;
+	}
+
+	/** Formen: außerhalb des Kreativmodus nur Blöcke, die mit dem gehaltenen Werkzeug etwas droppen. */
+	public static boolean dropsWithHeldTool(Player player, BlockState state) {
+		return player.isCreative() || player.hasCorrectToolForDrops(state);
+	}
+
+	/**
 	 * Berechnet die Auswahl ab {@code origin}, höchstens {@code max} Blöcke.
 	 * Ungeladene Chunks und Blöcke, die {@code mayBreak} ablehnt (z. B. Spawn-Schutz), werden nie aufgenommen.
 	 *
@@ -154,20 +171,15 @@ public record VeinSelection(ResourceKey<Level> dimension, VeinMode mode, BlockPo
 		}
 
 		/**
-		 * Für die Formen: gemischte Blöcke, aber keine Luft, keine Flüssigkeiten und nichts Unzerstörbares.
-		 * Außerhalb des Kreativmodus nur Blöcke, die mit dem gehaltenen Werkzeug etwas droppen,
-		 * damit z. B. ein 3×3 mit der Schaufel keinen Stein vernichtet.
+		 * Für die Formen: gemischte Blöcke, aber nur abbaubare ({@link #isMineable}), die mit dem gehaltenen
+		 * Werkzeug etwas droppen, damit z. B. ein 3×3 mit der Schaufel keinen Stein vernichtet.
 		 */
-		// liquid() ist als Legacy markiert, trifft aber genau Wasser/Lava; getFluidState() würde auch geflutete Stufen ausschließen
-		@SuppressWarnings("deprecation")
 		boolean diggable(BlockPos pos) {
 			// isLoaded zuerst: getBlockState() würde fehlende Chunks synchron laden
 			if (!level.isLoaded(pos)) return false;
 
 			BlockState state = level.getBlockState(pos);
-			if (state.isAir() || state.liquid()) return false;
-			if (!player.isCreative() && (state.getDestroySpeed(level, pos) < 0 || !player.hasCorrectToolForDrops(state))) return false;
-			return mayBreak.test(pos);
+			return isMineable(player, pos, state) && dropsWithHeldTool(player, state) && mayBreak.test(pos);
 		}
 
 		/** @return {@code true}, wenn {@code pos} neu aufgenommen wurde */
