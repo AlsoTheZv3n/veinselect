@@ -148,6 +148,7 @@ public class VeinSelect implements ModInitializer {
 		VeinSelection current = SELECTIONS.get(player.getUUID());
 		if (current == null || current.mode() == mode) return;
 
+		// Keine eigene Meldung: Beim Wechseln zeigt der Client nur den Namen des Modus, das soll stehen bleiben
 		if (current.dimension() == player.level().dimension()) {
 			select(player, current.origin(), current.face());
 		} else {
@@ -179,16 +180,30 @@ public class VeinSelect implements ModInitializer {
 
 		// Abwählen entscheidet der Client (V auf die Auswahl oder ins Leere schickt ein leeres Ziel), damit
 		// V halten + Mausrad den Modus einer bestehenden Auswahl wechseln kann, ohne sie vorher aufzuheben
-		select(player, origin, payload.face());
+		VeinSelection selection = select(player, origin, payload.face());
+		if (selection == null) return;
+
+		// Kurz halten: Modus, Anzahl und bei der Ader der Blocktyp, z. B. „Ader: 12 × Eisenerz“, „Tunnel: 13 Blöcke“
+		int count = selection.blocks().size();
+		boolean full = count >= effectiveLimit(player);
+		VeinMode mode = selection.mode();
+		Component message = mode.isShape()
+				? Component.translatable(full ? "message.veinselect.selected_shape_limit" : "message.veinselect.selected_shape", mode.displayName(), count)
+				: Component.translatable(full ? "message.veinselect.selected_limit" : "message.veinselect.selected", mode.displayName(), count, selection.blockAt(origin).getName());
+		player.sendOverlayMessage(message);
 	}
 
-	/** Neue Auswahl ab {@code origin} mit dem aktuellen Modus des Spielers; ersetzt eine bestehende. */
-	private static void select(ServerPlayer player, BlockPos origin, Direction face) {
+	/**
+	 * Neue Auswahl ab {@code origin} mit dem aktuellen Modus des Spielers; ersetzt eine bestehende.
+	 *
+	 * @return die neue Auswahl, oder {@code null}, wenn {@code origin} nicht auswählbar ist (Auswahl dann aufgehoben)
+	 */
+	private static VeinSelection select(ServerPlayer player, BlockPos origin, Direction face) {
 		ServerLevel level = player.level();
 		// isLoaded zuerst: Beim Moduswechsel kann der Ursprung inzwischen weit weg sein
 		if (!level.isLoaded(origin)) {
 			clear(player);
-			return;
+			return null;
 		}
 
 		// Der Ursprung landet immer in der Auswahl, also hier dieselbe Grundregel wie für alle anderen Blöcke.
@@ -196,21 +211,13 @@ public class VeinSelect implements ModInitializer {
 		BlockState state = level.getBlockState(origin);
 		if (!VeinSelection.isMineable(player, origin, state) || !mayBreak(player, origin)) {
 			clear(player);
-			return;
+			return null;
 		}
 
-		int limit = effectiveLimit(player);
-		VeinMode mode = mode(player);
-		VeinSelection selection = VeinSelection.scan(player, origin, face, mode, limit, pos -> mayBreak(player, pos));
+		VeinSelection selection = VeinSelection.scan(player, origin, face, mode(player), effectiveLimit(player), pos -> mayBreak(player, pos));
 		SELECTIONS.put(player.getUUID(), selection);
 		ServerPlayNetworking.send(player, new SelectionSyncPayload(List.copyOf(selection.blocks().keySet())));
-
-		int count = selection.blocks().size();
-		boolean full = count >= limit;
-		Component message = mode.isShape()
-				? Component.translatable(full ? "message.veinselect.selected_shape_limit" : "message.veinselect.selected_shape", mode.displayName(), count)
-				: Component.translatable(full ? "message.veinselect.selected_limit" : "message.veinselect.selected", mode.displayName(), count, state.getBlock().getName());
-		player.sendOverlayMessage(message);
+		return selection;
 	}
 
 	private static void onBlockBroken(Level level, Player player, BlockPos pos, BlockState state, BlockEntity blockEntity) {

@@ -142,8 +142,8 @@ public class VeinSelectClient implements ClientModInitializer {
 		// Wer gescrollt hat, will die Auswahl behalten, nur in einem anderen Modus
 		clearOnRelease = false;
 		setMode(mode);
-		// Mit Auswahl ersetzt die Antwort des Servers diese Meldung durch Modus + neue Blockanzahl
-		client.player.sendOverlayMessage(Component.translatable("message.veinselect.mode", mode.displayName()));
+		// Nur der Name, z. B. „Treppe hoch“; der Server schickt beim Neuberechnen absichtlich keine eigene Meldung
+		client.player.sendOverlayMessage(mode.displayName());
 		return true;
 	}
 
