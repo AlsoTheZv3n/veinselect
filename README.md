@@ -71,6 +71,21 @@ gradlew build        (Windows)
 
 Ergebnis: `build/libs/veinselect-1.1.1.jar`
 
+## Testen
+
+```
+gradlew runClientGameTest
+```
+
+Startet das Spiel und testet automatisch in einer Testwelt (Survival, Diamantspitzhacke), Quellcode in `src/gametest`:
+
+- 3×3 auf Grundgestein wählt nichts aus, und der Abbau eines Nachbarblocks lässt das Grundgestein stehen
+- „Treppe runter“ hat die richtige Form, und genau diese Blöcke werden abgebaut
+- V + Mausrad wechselt den Modus, berechnet die Auswahl neu, lässt die Hotbar stehen; Mausrad ohne V bewegt die Hotbar
+- Die Pipeline für die Umrandung durch Blöcke wird erzeugt
+
+Screenshots landen in `build/run/clientGameTest/screenshots`. Für Shader-Screenshots Sodium und Iris nach `build/run/clientGameTest/mods` legen, einen Shader-Pack nach `shaderpacks` und in `config/iris.properties` `shaderPack=<Dateiname>` eintragen. Der Test schaltet die Shader dann selbst ein und aus.
+
 ## Installieren
 
 1. Fabric Loader **0.20.1+** für Minecraft **26.3** installieren
